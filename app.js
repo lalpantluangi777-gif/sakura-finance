@@ -823,7 +823,7 @@ function pwSheet() {
 // ============================================================ auto-add: read bank / UPI / GPay messages and statements
 const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
 const MERCHANTS = [
-  [/swiggy|zomato|dominos|pizza|kfc|mcdonald|burger|cafe|restaurant|starbucks|barbeque/i, 'Dining'], [/uber|ola\b|olacabs|rapido|metro|irctc|redbus|fastag|toll|bus\b/i, 'Transport'],
+  [/swiggy|zomato|dominos|pizza|kfc|mcdonald|burger|cafe|restaur|starbucks|barbeque/i, 'Dining'], [/uber|ola\b|olacabs|rapido|metro|irctc|redbus|fastag|toll|bus\b/i, 'Transport'],
   [/makemytrip|goibibo|cleartrip|indigo|airindia|spicejet|yatra|airbnb|booking\.com/i, 'Travel'], [/amazon|flipkart|myntra|ajio|meesho|nykaa|shopping|mall/i, 'Shopping'],
   [/netflix|spotify|hotstar|primevideo|prime video|youtube|jiocinema|sonyliv|zee5|apple\.com|google play|subscription|disney/i, 'Subscriptions'],
   [/bigbasket|blinkit|zepto|dmart|grofers|instamart|jiomart|grocery|supermarket|reliance fresh/i, 'Groceries'], [/jio|airtel|vodafone|\bvi\b|bsnl|recharge|broadband|electricity|bescom|water|gas bill|tneb|mseb|wifi|dth|tata ?play|act fibernet/i, 'Utilities'],
@@ -856,7 +856,7 @@ function parseDateStr(s, fallback) {
 function fixDate(y, mo, d, fb) { const dt = new Date(y, mo - 1, d); if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d || dt > new Date(Date.now() + 864e5)) return fb; return y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0'); }
 function cleanMerchant(s) {
   s = (s || '').replace(/^\s*(neft|imps|rtgs|upi|ach|ecs|pos)\b[\s\-:\/]*/i, '').replace(/\bvpa\b/ig, '').replace(/@[a-z0-9.]+/ig, '').replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').replace(/^[\s.:,-]+|[\s.:,-]+$/g, '');
-  s = s.replace(/\s+(on|via|ref|upi|using|from|a\/c|avl|bal|txn|dated|for)\b.*$/i, '').trim();
+  s = s.replace(/\s+(on|via|ref|refno|ref\.?\s?no|upi|using|from|a\/c|avl|bal|txn|dated|for)\b.*$/i, '').trim();
   if (s.length > 32) s = s.slice(0, 32).trim();
   if (s === s.toUpperCase()) s = s.toLowerCase();
   const seen = new Set(); s = s.split(' ').filter(w => { const k = w.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; }).join(' ');
@@ -869,7 +869,8 @@ function parseMessage(raw, defaultDate) {
   if (/\b(request(ed)? (money|for)|collect request|pending|will be debited|due on|reminder)\b/.test(low) && !/\b(debited|credited|has been|successfully)\b/.test(low)) return null;
   const balAt = low.search(/\b(avl|avail|available|bal|balance|a\/c bal|limit)\b/);
   const head = balAt > 25 ? text.slice(0, balAt) : text;
-  let m = /(?:rs\.?|inr|₹|usd|\$|eur|€|gbp|£)\s*([\d,]+(?:\.\d{1,2})?)/i.exec(head) || /([\d,]+(?:\.\d{1,2})?)\s*(?:rs\b|inr\b|\/-)/i.exec(head);
+  let m = /(?:rs\.?|inr|₹|usd|\$|eur|€|gbp|£)\s*([\d,]+(?:\.\d{1,2})?)/i.exec(head) || /([\d,]+(?:\.\d{1,2})?)\s*(?:rs\b|inr\b|\/-)/i.exec(head)
+    || /\b(?:debited|credited|paid|sent|received|spent|withdrawn|deposited|transferred|dr|cr)\b[^\d]{0,18}?(\d[\d,]*(?:\.\d{1,2})?)/i.exec(head);
   if (!m) return null;
   const amt = parseFloat(m[1].replace(/,/g, '')); if (!(amt > 0) || amt > 1e10) return null;
   const dRe = /\b(debited|debit|spent|paid|sent|purchase[d]?|withdrawn|withdrawal|payment of|transferred to|charged|deducted|dr)\b/g, cRe = /\b(credited|credit|received|deposited|refund(?:ed)?|salary|added to|reversed|cr)\b/g;
@@ -878,7 +879,7 @@ function parseMessage(raw, defaultDate) {
   if (/\b(you have received|has been credited|credited to|received from|received rs|received ₹)\b/.test(low)) type = 'income';
   if (/\b(sent to|paid to|debited from|debited by|you paid|you sent)\b/.test(low)) type = 'expense';
   if (!type) return null;
-  const mer = (type === 'expense' ? /\b(?:to|at|towards|@)\s+(?:vpa\s+)?([A-Za-z0-9&@._\- ]{2,40})/i : /\b(?:from|by)\s+(?:vpa\s+)?([A-Za-z0-9&@._\- ]{2,40})/i).exec(text.replace(/^.*?(?:debited|credited|paid|sent|received|spent)/i, m0 => m0));
+  const mer = (type === 'expense' ? /\b(?:to|at|towards|@)\s+(?:vpa\s+)?([A-Za-z0-9&@._\- ]{2,40})/i : /\b(?:from|by(?!\s*(?:rs|inr|usd|₹|\$|\d)))\s+(?:vpa\s+)?([A-Za-z0-9&@._\- ]{2,40})/i).exec(text.replace(/^.*?(?:debited|credited|paid|sent|received|spent)/i, m0 => m0));
   let merchant = cleanMerchant(mer ? mer[1] : '');
   if (/^(your|a\/c|ac|account|bank|card|xx|x+\d)/i.test(merchant) || /^\d+$/.test(merchant)) merchant = '';
   if (!merchant) {
