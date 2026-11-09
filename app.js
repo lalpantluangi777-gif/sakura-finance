@@ -81,7 +81,7 @@ const LANG = {
     plan_rule: 'Suggested split (50/30/20): needs {n}, wants {w}, savings {s}.', plan_now: 'Right now your savings rate is {p}%.',
     tip_top: 'Your biggest cost is {c}. Cut it by 10% to free {a} a month.', tip_low: 'Pay yourself first: move {a} to savings the day income arrives.',
     tip_good: 'Great job - you keep {p}% of what you earn. Build an emergency fund next.', tip_neg: 'You spend more than you earn. List what you can cut first.',
-    plan_nodata: 'Add some income and expenses first, then I can build a plan.', unknown: 'I did not understand. Type "help".',
+    plan_nodata: 'Add some income and expenses first, then I can build a plan.', unknown: 'I did not catch that. Try: "lunch 120", "salary 5000", "balance", "report" or "help".', ask_kind: 'Is {a} income or an expense? Reply like "salary" or "lunch".',
     help: 'I can: record income/expenses ("received 5000 salary", "spent 200 petrol"), tell your balance, reports (today, yesterday, week, month, year), top spending, budgets, "can I afford 3000?", a money plan, lessons ("teach me budgeting") and undo.',
     budget_msg: 'Budgets this month:', no_budget_msg: 'You have no budgets yet.', thanks: 'You are welcome!',
     l_budget: 'BUDGET: a plan for your money before you spend it. Write your income, list fixed costs, set a limit per category, and check weekly.',
@@ -130,7 +130,7 @@ const LANG = {
     plan_now: 'Tunah chuan i sum khawl zat chu {p}% a ni.', tip_top: 'I senso lian ber chu {c} a ni. 10% tihtlem la, thla tin {a} i khawl ang.',
     tip_low: 'Nangma hmasa zawk rawh: lakluhna i dawn ni khan {a} khawl rawh.', tip_good: 'A tha hle - i lakluh zinga {p}% i khawl. Emergency fund siam rawh.',
     tip_neg: 'I lakluh aia i sen a tam. Tihtlem theih tur hmasa phawt list rawh.', plan_nodata: 'Lakluhna leh senso hmasa phawt dah rawh, chutah ruahmanna ka siam ang.',
-    unknown: 'Ka hre thiam lo. "help" tih ziak rawh.',
+    unknown: 'Ka hre thiam lo. Hetiang tih tum rawh: "chaw 80", "salary 5000 dawng", "balance", "report", "help".', ask_kind: '{a} hi lakluh (income) emaw senso (expense) em? "salary" emaw "chaw" tih ang chi ziak rawh.',
     help: 'Ka tih theih: lakluhna/senso dah ("salary 5000 dawng", "petrol 200 sen"), balance hrilh, report (vawiin, nimin, chawlhkar, thla, kum), senso lian ber, budget, "3000 ka lei thei em?", sum ruahmanna, zirtirna ("budget min zirtir") leh paih (undo).',
     budget_msg: 'He thla budget:', no_budget_msg: 'Budget a la awm lo.', thanks: 'Aw, ka lawm e!',
     l_budget: 'BUDGET: I sum i hman hmain ruahmanna siam a ni. Lakluhna ziak la, hmanrua nei fel list la, category tin limit dah la, chawlhkar khat zel-ah en rawh.',
@@ -354,8 +354,15 @@ function loadDemo() {
 
 // ============================================================ assistant (offline rules, English + Mizo)
 const fold = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+let pendingAmt = 0;
+const VOCAB = ['balance', 'report', 'budget', 'income', 'expense', 'salary', 'spent', 'today', 'yesterday', 'week', 'month', 'help', 'undo', 'thanks', 'summary', 'groceries', 'petrol', 'recharge', 'rent'];
+const ABBR = { bal: 'balance', bl: 'balance', blnc: 'balance', balanc: 'balance', rep: 'report', repo: 'report', rpt: 'report', bud: 'budget', hlp: 'help', inc: 'income', exp: 'expense', sal: 'salary', yday: 'yesterday', tdy: 'today', wk: 'week', mth: 'month' };
+function lev(a, b) { const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]); for (let j = 1; j <= b.length; j++) d[0][j] = j; for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[a.length][b.length]; }
+function fixWords(low) {
+  return low.split(/(\s+)/).map(w => { if (!/^[a-z]+$/.test(w)) return w; if (ABBR[w]) return ABBR[w]; if (w.length < 5 || VOCAB.includes(w)) return w; const m = VOCAB.find(v => v.length >= 5 && Math.abs(v.length - w.length) <= 1 && lev(v, w) <= 1); return m || w; }).join('');
+}
 const W = {
-  undo: ['undo', 'delete last', 'remove last', 'paih rawh', 'tihlui'], help: ['help', 'what can you do', 'ti thei', 'eng nge'],
+  undo: ['undo', 'delete last', 'remove last', 'paih rawh', 'tihlui'], help: ['help', 'what can you do', 'ti thei', 'eng nge'], report: ['report', 'summary', 'hisab', 'hmuhchhuak'],
   thanks: ['thanks', 'thank you', 'kan lawm', 'lawm'], lesson: ['teach', 'lesson', 'learn', 'explain', 'zirtir', 'hrilh', 'what is'],
   afford: ['afford', 'can i buy', 'can i spend', 'can i pay', 'lei thei'], plan: ['plan', 'advice', 'advise', 'save more', 'how to save', 'suggest', 'tips', 'ruahmanna', 'zilh'],
   top: ['spend most', 'spent most', 'biggest', 'top spending', 'where did my money', 'tam ber', 'sen tam'], budget: ['budget'],
@@ -396,7 +403,7 @@ function smallTalk(low) {
   return null;
 }
 function assist(text) {
-  const low = fold(text), amt = parseAmount(low);
+  const low = fixWords(fold(text)), amt = parseAmount(low);
   if (!amt) { const st = smallTalk(low); if (st) return st; }
   const inc = hasW(low, W.income), exp = hasW(low, W.expense);
   const rec = (type, cat, a) => {
@@ -408,6 +415,10 @@ function assist(text) {
     }
     return msg;
   };
+  if (!amt && pendingAmt) {
+    const i2 = hasW(low, W.income), e2 = hasW(low, W.expense), cE = findCat(low, CAT_WORDS), cI = findCat(low, INC_WORDS);
+    if (i2 || e2 || cE || cI) { const a = pendingAmt; pendingAmt = 0; const type = (i2 && !e2) || (cI && !cE && !e2) ? 'income' : 'expense'; return rec(type, type === 'income' ? (cI || 'Other') : (cE || 'Other'), a); }
+  }
   if (hasW(low, W.undo)) {
     const i = book().tx.findIndex(x => x.id === lastTx); if (i < 0) return t('nothing_undo');
     const x = book().tx.splice(i, 1)[0]; lastTx = null; return t('undone', { w: fmt(x.amt) + ' ' + t('c_' + x.cat) });
@@ -429,11 +440,15 @@ function assist(text) {
     return t('budget_msg') + '\n' + e.map(([c, l]) => '• ' + t('c_' + c) + ': ' + fmt(sp[c] || 0) + ' / ' + fmt(l) + ' (' + Math.round((sp[c] || 0) / l * 100) + '%)').join('\n');
   }
   if (pending && amt) return rec(pending.type, pending.cat, amt);
+  if (amt && !inc && !exp && findCat(low, CAT_WORDS)) return rec('expense', findCat(low, CAT_WORDS), amt);
+  if (amt && !inc && !exp && findCat(low, INC_WORDS)) return rec('income', findCat(low, INC_WORDS), amt);
+  if (amt && low.replace(/[^a-z]/g, '').length <= 2) { pendingAmt = amt; return t('ask_kind', { a: fmt(amt) }); }
   if (amt && (inc || exp)) {
     const type = inc && !exp ? 'income' : (exp && !inc ? 'expense' : (hasW(low, ['received', 'earned', 'dawng', 'salary']) ? 'income' : 'expense'));
     const cat = type === 'income' ? (findCat(low, INC_WORDS) || 'Other') : (findCat(low, CAT_WORDS) || 'Other');
     return rec(type, cat, amt);
   }
+  if (!amt && hasW(low, W.report) && !hasW(low, W.today) && !hasW(low, W.week) && !hasW(low, W.yesterday) && !hasW(low, W.year)) { const m = ym(today()), [i, e] = monthTotals(m); return t('rep', { p: t('p_month'), i: fmt(i), e: fmt(e) }); }
   if (!amt && hasW(low, W.howmuch)) { const [i, e] = monthTotals(ym(today())); return t('bal_msg', { b: fmt(balance()), i: fmt(i), e: fmt(e) }); }
   if (!amt) {
     const per = hasW(low, W.yesterday) ? 'yesterday' : hasW(low, W.today) ? 'today' : hasW(low, W.week) ? 'week' : hasW(low, W.year) ? 'year' : hasW(low, W.month) ? 'month' : null;
@@ -591,7 +606,7 @@ function startIdle() {
   lastActive = Date.now(); clearInterval(idleTimer);
   idleTimer = setInterval(() => { if (S && Date.now() - lastActive > (meta.autolock || 2) * 60000) lockNow(t('idle_lock')); }, 5000);
 }
-function lockNow(note) { clearInterval(idleTimer); S = null; chat = []; lastTx = null; pending = null; lockNote = note || ''; screenLock(); }
+function lockNow(note) { clearInterval(idleTimer); S = null; chat = []; lastTx = null; pending = null; pendingAmt = 0; lockNote = note || ''; screenLock(); }
 ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach(ev => document.addEventListener(ev, () => { lastActive = Date.now(); }, { passive: true, capture: true }));
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) hiddenAt = Date.now();
