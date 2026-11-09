@@ -115,3 +115,53 @@ textarea{width:100%;border:1.5px solid var(--line);background:var(--card);border
 .dots{display:flex;flex-wrap:wrap;gap:12px}
 .dot{width:34px;height:34px;border-radius:50%;border:3px solid var(--card);box-shadow:0 0 0 1.5px var(--line);padding:0;position:relative;cursor:pointer;display:inline-block}
 .dot.on{box-shadow:0 0 0 3px var(--ink)}
+
+/* ===== Desktop layout: auto (>=900px) or forced via data-layout=desktop ===== */
+@media (min-width:900px){
+html:not([data-layout=mobile]) #app{max-width:none;box-shadow:none}
+html:not([data-layout=mobile]) .screen{padding-left:230px}
+html:not([data-layout=mobile]) .nav{left:0;right:auto;top:0;bottom:0;width:230px;height:auto;border-radius:0;flex-direction:column;align-items:stretch;justify-content:flex-start;
+ gap:6px;padding:76px 14px 20px;box-shadow:var(--sh);z-index:5}
+html:not([data-layout=mobile]) .nav::before{content:"🌸 Sakura Finance";position:absolute;top:24px;left:22px;font-weight:800;color:var(--pink);font-size:18px;letter-spacing:.5px}
+html:not([data-layout=mobile]) .nav button{flex-direction:row;font-size:15px;gap:12px;padding:12px 14px;border-radius:14px;width:100%;justify-content:flex-start}
+html:not([data-layout=mobile]) .nav button.on{background:var(--pinkL)}
+html:not([data-layout=mobile]) .nav button:hover{background:var(--pinkL)}
+html:not([data-layout=mobile]) .nav .fab{order:-1;width:100%;height:auto;border-radius:14px;font-size:15px;margin:0 0 10px;padding:13px;justify-content:center;min-width:0}
+html:not([data-layout=mobile]) .nav .fab::after{content:" Add"; font-size:15px;font-weight:700}
+html:not([data-layout=mobile]) .top{padding:20px 36px 6px}
+html:not([data-layout=mobile]) .scroll{padding:14px 36px 40px;width:100%;max-width:1180px;margin:0 auto}
+html:not([data-layout=mobile]) .screen > .scroll{align-self:center}
+html:not([data-layout=mobile]) .composer{left:230px;bottom:0;max-width:none;padding:10px 36px 18px}
+html:not([data-layout=mobile]) .composer input{max-width:900px}
+html:not([data-layout=mobile]) .sheet-bg{align-items:center;justify-content:center}
+html:not([data-layout=mobile]) .sheet{width:520px;max-width:92%;max-height:88%;border-radius:28px;padding-bottom:22px}
+html:not([data-layout=mobile]) .scroll.dash{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px;align-content:start}
+html:not([data-layout=mobile]) .scroll.dash > .hero,html:not([data-layout=mobile]) .scroll.dash > .kpis,html:not([data-layout=mobile]) .scroll.dash > .btn,html:not([data-layout=mobile]) .scroll.dash > .wide{grid-column:1/-1}
+}
+@media (min-width:1300px){
+html:not([data-layout=mobile]) .scroll.dash{grid-template-columns:repeat(3,minmax(0,1fr))}
+html:not([data-layout=mobile]) .scroll.dash > .span2{grid-column:span 2}
+}
+/* forced desktop on small screens */
+html[data-layout=desktop] #app{max-width:none;box-shadow:none}
+html[data-layout=desktop] .screen{padding-left:230px}
+html[data-layout=desktop] .nav{left:0;right:auto;top:0;bottom:0;width:230px;height:auto;border-radius:0;flex-direction:column;align-items:stretch;justify-content:flex-start;
+ gap:6px;padding:76px 14px 20px;box-shadow:var(--sh);z-index:5}
+html[data-layout=desktop] .nav::before{content:"🌸 Sakura Finance";position:absolute;top:24px;left:22px;font-weight:800;color:var(--pink);font-size:18px;letter-spacing:.5px}
+html[data-layout=desktop] .nav button{flex-direction:row;font-size:15px;gap:12px;padding:12px 14px;border-radius:14px;width:100%;justify-content:flex-start}
+html[data-layout=desktop] .nav button.on{background:var(--pinkL)}
+html[data-layout=desktop] .nav button:hover{background:var(--pinkL)}
+html[data-layout=desktop] .nav .fab{order:-1;width:100%;height:auto;border-radius:14px;font-size:15px;margin:0 0 10px;padding:13px;justify-content:center;min-width:0}
+html[data-layout=desktop] .nav .fab::after{content:" Add"; font-size:15px;font-weight:700}
+html[data-layout=desktop] .top{padding:20px 36px 6px}
+html[data-layout=desktop] .scroll{padding:14px 36px 40px;width:100%;max-width:1180px;margin:0 auto}
+html[data-layout=desktop] .screen > .scroll{align-self:center}
+html[data-layout=desktop] .composer{left:230px;bottom:0;max-width:none;padding:10px 36px 18px}
+html[data-layout=desktop] .composer input{max-width:900px}
+html[data-layout=desktop] .sheet-bg{align-items:center;justify-content:center}
+html[data-layout=desktop] .sheet{width:520px;max-width:92%;max-height:88%;border-radius:28px;padding-bottom:22px}
+html[data-layout=desktop] .scroll.dash{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px;align-content:start}
+html[data-layout=desktop] .scroll.dash > .hero,html[data-layout=desktop] .scroll.dash > .kpis,html[data-layout=desktop] .scroll.dash > .btn,html[data-layout=desktop] .scroll.dash > .wide{grid-column:1/-1}
+html[data-layout=desktop] .scroll.dash{grid-template-columns:repeat(3,minmax(0,1fr))}
+html[data-layout=desktop] .scroll.dash > .span2{grid-column:span 2}
+.laybtn{border:0;background:var(--card);border-radius:50%;width:36px;height:36px;font-size:17px;box-shadow:var(--sh)}

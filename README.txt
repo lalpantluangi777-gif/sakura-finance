@@ -110,3 +110,8 @@ IMPORTANT, in plain words:
   "Reset password email" changes only the online account password. If the app lock password
   is forgotten, the data cannot be recovered; use a backup file or erase and start fresh.
 - Phone-number (SMS) login is not included: Firebase charges for SMS.
+
+DESKTOP + MOBILE (same app)
+- Screens 900px and wider get a left sidebar, a wide multi-column dashboard and centered pop-up sheets.
+- Phones keep the bottom-bar layout. No extra files: same index.html/app.js/style.css.
+- On desktop Chrome/Edge: open the site, click the install icon in the address bar to get a separate app window.

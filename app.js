@@ -491,7 +491,7 @@ function syncHist() {
   const top = history.state && history.state.v;
   if (sheetPushed) { if (!$app.querySelector('.sheet-bg')) { sheetPushed = false; history.replaceState({ v: view }, ''); } return; }
   if (view === 'home') { if (top && top !== 'home') { skipPop++; history.back(); } }
-  else if (!top || top === 'home') history.pushState({ v: view }, '');
+  else if (!top || top === 'home' || (view === 'profile' && top === 'settings')) history.pushState({ v: view }, '');
   else if (top !== view) history.replaceState({ v: view }, '');
 }
 window.addEventListener('popstate', e => {
@@ -686,10 +686,12 @@ const SUPPORT = { email: '', whatsapp: '' }; // <-- put your support email / Wha
 const prof = () => (S.data.profile = S.data.profile || {});
 function avatarContent() { const ph = prof().photo; return ph ? h('img', { src: ph, alt: '', style: 'width:100%;height:100%;border-radius:50%;object-fit:cover' }) : (meta.name || '?')[0].toUpperCase(); }
 function resizeImage(file, max = 160) {
-  return new Promise((ok, no) => { const img = new Image(), u = URL.createObjectURL(file);
-    img.onload = () => { const r = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * r); c.height = Math.round(img.height * r);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u); ok(c.toDataURL('image/jpeg', .85)); };
-    img.onerror = () => { URL.revokeObjectURL(u); no(new Error('img')); }; img.src = u; });
+  return new Promise((ok, no) => { const rd = new FileReader();
+    rd.onerror = () => no(new Error('read')); rd.onload = () => { const img = new Image();
+      img.onload = () => { const r = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.width * r)); c.height = Math.max(1, Math.round(img.height * r));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); ok(c.toDataURL('image/jpeg', .85)); };
+      img.onerror = () => no(new Error('img')); img.src = rd.result; };
+    rd.readAsDataURL(file); });
 }
 function photoPicker(key, obj, label) {
   const box = h('div', { class: 'row', style: 'margin:8px 0' }), draw = () => { box.replaceChildren(...[
@@ -698,20 +700,24 @@ function photoPicker(key, obj, label) {
     obj[key] ? h('button', { class: 'btn danger small', style: 'width:auto', onclick: () => { delete obj[key]; draw(); } }, '✕') : null].filter(Boolean)); };
   draw(); return box;
 }
-function profileSheet() {
+function viewProfile() {
   const p = prof(), co = (p.company = p.company || {}), me = { photo: p.photo };
-  const f = (label, val, type = 'text') => { const i = h('input', { type, value: val || '', placeholder: label }); return [h('label', {}, label), i, i]; };
+  const f = (label, val, type = 'text') => { const i = h('input', { type, value: val || '', placeholder: label, maxlength: 120, 'aria-label': label }); return [h('label', {}, label), i, i]; };
   const nm = f(t('your_name'), meta.name), em = f('Email', p.email, 'email'), ph = f('Phone', p.phone, 'tel');
   const cn = f('Company name', co.name), tx = f('GSTIN / Tax ID', co.tax), ad = f('Address', co.address), cp = f('Company phone', co.phone), ce = f('Company email', co.email, 'email');
-  const ph1 = photoPicker('photo', me, 'Photo'), lg = photoPicker('logo', co, 'Logo');
-  sheet(h('h2', {}, '👤 Profile'), ph1, nm.slice(0, 2), em.slice(0, 2), ph.slice(0, 2),
-    isBiz() ? [h('h3', { style: 'margin:14px 0 4px' }, '🏢 Company'), lg, cn.slice(0, 2), tx.slice(0, 2), ad.slice(0, 2), cp.slice(0, 2), ce.slice(0, 2)] : null,
-    h('button', { class: 'btn', style: 'margin-top:14px', onclick: async () => {
-      const name = nm[2].value.trim(); if (!name) return toast(t('need_name'));
+  const err = h('div', { class: 'err' });
+  const n = Object.values(S.data.books).reduce((a, b) => a + (b.tx ? b.tx.length : 0), 0);
+  shell(h('div', { class: 'scroll' }, h('div', { class: 'row', style: 'margin-bottom:6px' }, h('h1', { class: 'sp' }, '👤 Profile'), h('button', { class: 'btn soft small', style: 'width:auto', onclick: () => { view = 'settings'; route(); } }, '⚙ ' + t('settings'))),
+    h('div', { class: 'card' }, h('h2', { style: 'margin-bottom:4px' }, 'Photo'), photoPicker('photo', me, '📷 Upload photo'), h('p', { class: 'sub', style: 'margin:6px 0 0' }, n + ' transactions · stored only on this phone')),
+    h('div', { class: 'card' }, h('h2', { style: 'margin-bottom:6px' }, 'Personal'), nm.slice(0, 2), em.slice(0, 2), ph.slice(0, 2)),
+    isBiz() ? h('div', { class: 'card' }, h('h2', { style: 'margin-bottom:6px' }, '🏢 Company'), photoPicker('logo', co, '🖼 Upload logo'), cn.slice(0, 2), tx.slice(0, 2), ad.slice(0, 2), cp.slice(0, 2), ce.slice(0, 2)) : null,
+    accountCard(false), err,
+    h('button', { class: 'btn', onclick: async () => {
+      const name = nm[2].value.trim(); if (!name) { err.textContent = t('need_name'); return; }
       meta.name = name; saveMeta(); p.email = em[2].value.trim(); p.phone = ph[2].value.trim();
       if (me.photo) p.photo = me.photo; else delete p.photo;
       co.name = cn[2].value.trim(); co.tax = tx[2].value.trim(); co.address = ad[2].value.trim(); co.phone = cp[2].value.trim(); co.email = ce[2].value.trim();
-      await persist(); closeSheet(); toast(t('saved')); route(); } }, t('save') || 'Save'));
+      await persist(); toast(t('saved')); history.back(); } }, t('save') || 'Save')));
 }
 const FAQ = [
   ['How do I add expenses automatically?', 'Tap the ⚡ button on Home, paste your bank/UPI SMS or choose a bank statement file (.csv).'],
@@ -731,8 +737,8 @@ function shell(body, opts = {}) {
   const r = root();
   const modeSw = h('div', { class: 'mode' }, ['personal', 'student', 'business'].map(m => h('button', { class: S.data.mode === m ? 'on' : '', onclick: async () => { S.data.mode = m; await persist(); if (view === 'invoices' && m !== 'business') view = 'budgets'; route(); } }, t(m))));
   r.append(h('div', { class: 'screen' },
-    h('div', { class: 'top' + (opts.warm ? ' warm' : '') }, (opts.back ?? view !== 'home') ? h('button', { class: 'backbtn', 'aria-label': 'Back', onclick: () => history.back() }, '‹') : null, h('button', { class: 'avatar', 'aria-label': t('settings'), onclick: () => { view = 'settings'; route(); } }, avatarContent()),
-      opts.pill ? opts.pill : h('div', { class: 'sp' }), opts.pill ? null : modeSw, opts.bell !== false ? bellBtn() : null),
+    h('div', { class: 'top' + (opts.warm ? ' warm' : '') }, (opts.back ?? view !== 'home') ? h('button', { class: 'backbtn', 'aria-label': 'Back', onclick: () => history.back() }, '‹') : null, h('button', { class: 'avatar', 'aria-label': 'Profile', onclick: () => { view = 'profile'; route(); } }, avatarContent()),
+      opts.pill ? opts.pill : h('div', { class: 'sp' }), opts.pill ? null : modeSw, h('button', { class: 'laybtn', title: 'Desktop / Mobile view', 'aria-label': 'Switch desktop or mobile view', onclick: toggleLayout }, isDeskNow() ? '📱' : '🖥'), opts.bell !== false ? bellBtn() : null),
     body,
     opts.noNav ? null : h('div', { class: 'nav' }, navBtn('home', t('home')), navBtn('calendar', t('calendar')),
       h('button', { class: 'fab', onclick: () => addSheet(), 'aria-label': t('add') }, '+'),
@@ -749,13 +755,13 @@ function allowanceCard() {
 }
 function viewHome() {
   const m = viewM || ym(today()), [inc, exp] = monthTotals(m), bc = byCat(m).slice(0, 5), [vals, labs] = series();
-  const body = h('div', { class: 'scroll' },
+  const body = h('div', { class: 'scroll dash' },
     h('div', { class: 'hero' }, h('small', {}, t('balance')), h('div', { class: 'big' }, fmt(balance())),
       h('div', { class: 'chips' }, h('span', { class: 'chip' }, '▼ ' + t('income') + ' ' + fmt(inc)), h('span', { class: 'chip' }, '▲ ' + t('expense') + ' ' + fmt(exp)))),
     h('button', { class: 'btn soft', style: 'margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:8px', onclick: () => captureSheet() }, '⚡ ' + t('auto_card')),
     S.data.mode === 'student' ? allowanceCard() : null,
     isBiz() ? h('div', { class: 'kpis' }, [[t('receivable'), receivable(), 'pos'], [t('payable'), payable(), 'neg'], [t('profit'), inc - exp, inc - exp >= 0 ? 'pos' : 'neg']].map(k => h('div', { class: 'kpi' }, h('h3', {}, k[0]), h('b', { class: k[2] }, fmt(k[1]))))) : null,
-    h('div', { class: 'card' }, h('h2', {}, t('spend_freq')),
+    h('div', { class: 'card span2' }, h('h2', {}, t('spend_freq')),
       h('div', { class: 'tabs' }, ['week', 'month', 'year'].map(k => h('button', { class: 'tab' + (tab === k ? ' on' : ''), onclick: () => { tab = k; route(); } }, t(k)))),
       areaChart(vals, labs)),
     bc.length ? h('div', { class: 'card' }, h('h2', { style: 'margin-bottom:8px' }, t('breakdown')), h('div', { class: 'row' }, donut(bc),
@@ -873,11 +879,18 @@ const VL = { en: 'en-IN', lus: 'en-IN', hi: 'hi-IN', bn: 'bn-IN', es: 'es-ES', f
 function viewAssistant() {
   if (!chat.length && Array.isArray(S.data.chat)) chat = S.data.chat.map(x => [String(x[0]), String(x[1])]);
   if (!chat.length) chat.push(['bot', t('welcome_bot')]);
-  const log = h('div', { class: 'chat' }, chat.map(([w, m]) => h('div', { class: 'msg ' + w }, m)));
+  const log = h('div', { class: 'chat' }, chat.slice(-120).map(([w, m]) => h('div', { class: 'msg ' + w }, m)));
   const input = h('input', { placeholder: t('ask_ph'), value: draft, enterkeyhint: 'send', 'aria-label': t('assistant'), oninput: e => draft = e.target.value });
+  const toEnd = () => { const sc = log.closest('.scroll'); if (sc) sc.scrollTop = sc.scrollHeight; };
   const send = async (txt, spoken) => {
-    window._spk = !!spoken; txt = (txt ?? input.value).trim(); if (!txt) return; draft = ''; chat.push(['me', txt]);
-    const rep = assist(txt); chat.push(['bot', rep || t('unknown')]); S.data.chat = chat.slice(-60); try { if (txt && window.speechSynthesis && window._spk) { const u = new SpeechSynthesisUtterance(rep || t('unknown')); u.lang = VL[lang] || 'en-IN'; speechSynthesis.speak(u); } } catch (e) {} await persist(); route(); setTimeout(() => { const s = $app.querySelector('.scroll'); if (s) s.scrollTop = 1e6; }, 30);
+    txt = (txt ?? input.value).trim(); if (!txt) return; draft = ''; input.value = '';
+    chat.push(['me', txt]); log.append(h('div', { class: 'msg me' }, txt));
+    const rep = assist(txt) || t('unknown'); chat.push(['bot', rep]); log.append(h('div', { class: 'msg bot' }, rep));
+    while (log.children.length > 120) log.firstChild.remove();
+    if (chat.length > 200) chat = chat.slice(-120);
+    S.data.chat = chat.slice(-60); toEnd(); if (!spoken) input.focus({ preventScroll: true });
+    try { if (spoken && window.speechSynthesis) { const u = new SpeechSynthesisUtterance(rep); u.lang = VL[lang] || 'en-IN'; speechSynthesis.speak(u); } } catch (e) { }
+    try { await persist(); } catch (e) { }
   };
   input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -905,9 +918,10 @@ function viewSettings() {
   bioRow.append(bioBtn);
   const file = h('input', { type: 'file', accept: '.json,.sakura', class: 'hide', onchange: () => restoreSheet2(file) });
   shell(h('div', { class: 'scroll set' }, h('div', { class: 'row', style: 'margin-bottom:6px' }, h('h1', { class: 'sp' }, t('settings')), h('button', { class: 'btn soft small', onclick: () => { view = 'home'; route(); } }, '✕')),
-    h('div', { class: 'card', onclick: profileSheet, style: 'cursor:pointer' }, h('div', { class: 'row' }, h('div', { class: 'avatar', style: 'width:52px;height:52px' }, avatarContent()),
+    h('div', { class: 'card', onclick: () => { view = 'profile'; route(); }, style: 'cursor:pointer' }, h('div', { class: 'row' }, h('div', { class: 'avatar', style: 'width:52px;height:52px' }, avatarContent()),
       h('div', { class: 'sp' }, h('b', {}, meta.name), h('div', { class: 'sub' }, (prof().email || prof().phone || '') + (isBiz() && prof().company && prof().company.name ? ' · ' + prof().company.name : ''))), h('span', { class: 'tag' }, '✎'))),
     accountCard(false),
+    h('div', { class: 'card' }, h('h2', { style: 'margin-bottom:10px' }, 'View'), h('div', { class: 'tabs' }, [['auto', 'Auto'], ['desktop', '🖥 Desktop'], ['mobile', '📱 Mobile']].map(([k, n]) => h('button', { class: 'tab' + ((lsGet('sk.layout') || 'auto') === k ? ' on' : ''), onclick: () => { k === 'auto' ? (() => { try { localStorage.removeItem('sk.layout'); } catch {} })() : lsSet('sk.layout', k); applyLayout(); route(); } }, n)))),
     h('div', { class: 'card' }, h('h2', { style: 'margin-bottom:10px' }, t('theme')), themeRow(), accentRow()),
     h('div', { class: 'card' }, row(t('language'), langPicker(route)), row(t('currency'), cur), langPackRow()),
     h('div', { class: 'card' }, h('h2', {}, t('security')), bioRow, row(t('autolock'), lock),
@@ -1114,6 +1128,14 @@ function goalsAndSubs() {
 // ============================================================ themes + language packs
 const THEMES = ['pink', 'midnight', 'auto'];
 let theme = (lsGet('sk.theme') && THEMES.includes(lsGet('sk.theme'))) ? lsGet('sk.theme') : 'pink';
+function applyLayout() {
+  const l = lsGet('sk.layout'), d = document.documentElement;
+  if (l === 'desktop' || l === 'mobile') d.dataset.layout = l; else delete d.dataset.layout;
+  const vp = document.querySelector('meta[name=viewport]');
+  if (vp) vp.content = l === 'desktop' && screen.width < 900 ? 'width=1100, viewport-fit=cover' : 'width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content';
+}
+const isDeskNow = () => document.documentElement.dataset.layout === 'desktop' || (document.documentElement.dataset.layout !== 'mobile' && innerWidth >= 900);
+const toggleLayout = () => { lsSet('sk.layout', isDeskNow() ? 'mobile' : 'desktop'); applyLayout(); route(); };
 function applyTheme() {
   const dark = theme === 'midnight' || (theme === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme = dark ? 'midnight' : 'pink';
@@ -1138,6 +1160,7 @@ function accentRow() {
   return h('div', { style: 'margin-top:14px' }, h('h3', { style: 'margin-bottom:8px' }, t('accent')), h('div', { class: 'dots' }, dots, custom));
 }
 function setTheme(x) { theme = x; lsSet('sk.theme', x); applyTheme(); }
+applyLayout();
 applyTheme();
 if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener && matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 function themeRow() {
@@ -1174,7 +1197,7 @@ function route() {
   if (sharedText) { const st = sharedText; sharedText = ''; setTimeout(() => captureSheet(st), 50); }
   if (view === 'budgets' && isBiz()) view = 'invoices';
   if (view === 'invoices' && !isBiz()) view = 'budgets';
-  ({ home: viewHome, calendar: viewCalendar, activity: viewActivity, budgets: viewBudgets, invoices: viewInvoices, assistant: viewAssistant, settings: viewSettings }[view] || viewHome)();
+  ({ home: viewHome, calendar: viewCalendar, activity: viewActivity, budgets: viewBudgets, invoices: viewInvoices, assistant: viewAssistant, settings: viewSettings, profile: viewProfile }[view] || viewHome)();
 }
 if (meta === null) { meta = loadMeta(); if (meta && meta.lang && LANG[meta.lang]) lang = meta.lang; }
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => { });
