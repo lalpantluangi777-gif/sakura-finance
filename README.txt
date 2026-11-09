@@ -87,3 +87,26 @@ NEW: AUTO-ADD, THEMES, STUDENT MODE, MORE LANGUAGES
 5) COMPANIES / VERY LARGE ORGANISATIONS: this app keeps data on one phone
    (encrypted). A big company needs a server, user accounts, approvals and
    audit logs - that is the next stage, not part of this mini-project.
+
+
+=====================================================
+ACCOUNT LOGIN (Firebase): Google + email + password reset
+=====================================================
+Files: account.html, account.js, firebase-config.js (your public Firebase web config).
+- Onboarding and Settings show an "Account (optional)" card -> Sign in / Sign up.
+- Sign in with Google, or email + password, or "Forgot password" (Firebase sends the email).
+- Sign-up also sends a verification email.
+- The sign-in page is separate from the main app, so the main app keeps its strict
+  security policy and never loads Google scripts.
+
+Firebase console checklist (must be done once):
+  1. Authentication -> Sign-in method: Email/Password = Enabled, Google = Enabled.
+  2. Authentication -> Settings -> Authorized domains: add your site (user.github.io).
+
+IMPORTANT, in plain words:
+- Signing in only proves who you are and fills your name/email. Your transactions are NOT
+  uploaded; there is no cloud sync, so a new phone starts empty unless you restore a backup.
+- The app lock password (which encrypts your data) is separate from the Firebase password.
+  "Reset password email" changes only the online account password. If the app lock password
+  is forgotten, the data cannot be recovered; use a backup file or erase and start fresh.
+- Phone-number (SMS) login is not included: Firebase charges for SMS.

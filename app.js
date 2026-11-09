@@ -17,14 +17,14 @@ function h(tag, attrs, ...kids) {
     else if (k === 'value') el.value = v;
     else el.setAttribute(k, v === true ? '' : v);
   }
-  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : String(kid));
+  for (const kid of kids.flat(Infinity)) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : String(kid));
   return el;
 }
 const svgNS = 'http://www.w3.org/2000/svg';
 function svg(tag, attrs, ...kids) {
   const el = document.createElementNS(svgNS, tag);
   for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
-  for (const kid of kids.flat()) if (kid != null) el.append(kid.nodeType ? kid : String(kid));
+  for (const kid of kids.flat(Infinity)) if (kid != null) el.append(kid.nodeType ? kid : String(kid));
   return el;
 }
 const b64 = u8 => btoa(String.fromCharCode(...new Uint8Array(u8)));
@@ -149,6 +149,10 @@ const LANG = {
 
 // ---- strings for auto-add, goals, student mode, themes, language packs
 Object.assign(LANG.en, {
+  acc_title: 'Account (optional)', acc_why: 'Sign in with Google or email to link your profile and get a password-reset email. Your money data stays on this phone.', acc_signin: 'Sign in / Sign up', acc_signed: 'Signed in', acc_unverified: 'email not verified',
+  acc_out: 'Sign out', acc_out_q: 'Sign out of your account? Your data stays on this phone.', acc_reset: 'Send password reset email', forgot: 'Forgot password?',
+  forgot_why: 'Your data is locked with this app password, so nobody can reset it, not even us. The reset email only changes your online account password. To get back in you can restore an encrypted backup file, or erase this phone and start fresh.',
+  accent: 'Colour',
   calendar: 'Calendar',
   student: 'Student', student_d: 'For school & college students', auto_add: 'Auto-add', auto_card: 'Add from bank SMS / UPI / statement', cap_title: 'Auto-add transactions',
   cap_msgs: 'Messages', cap_file: 'Statement file', cap_paste: 'Paste your bank / UPI / GPay messages here. You can paste many at once - no typing of amounts.',
@@ -162,6 +166,10 @@ Object.assign(LANG.en, {
   pack_template: 'Download template', pack_ok: 'Language added.', pack_bad: 'That is not a valid language file.', amount_q: 'Amount?', pick_cat: 'Category',
 });
 Object.assign(LANG.lus, {
+  acc_title: 'Account (duh chuan)', acc_why: 'Google emaw email hmangin login la, i profile nen inzawm la password reset email i dawng thei ang. I sum data chu he phone ah a awm reng.', acc_signin: 'Login / Sign up', acc_signed: 'Login tawh', acc_unverified: 'email verify a la ni lo',
+  acc_out: 'Logout', acc_out_q: 'Logout i duh em? I data chu he phone ah a awm reng ang.', acc_reset: 'Password reset email thawn', forgot: 'Password theihnghilh?',
+  forgot_why: 'I data hi he app password hmangin a khar a, chuvang chuan tumahin reset thei lo. Reset email hian online account password chauh a thlak. Kir leh nan backup file (encrypted) restore emaw he phone erase la a thar lo tan ngai a ni.',
+  accent: 'Rawng',
   calendar: 'Ni Calendar',
   student: 'Zirlai', student_d: 'School leh college zirlai tan', auto_add: 'Auto-dah', auto_card: 'Bank SMS / UPI / statement aṭanga dah', cap_title: 'Transaction auto-dah',
   cap_msgs: 'Message', cap_file: 'Statement file', cap_paste: 'I bank / UPI / GPay message hi hetah paste rawh. A tam tak pawh paste thei - zat ziak a ngai lo.',
@@ -221,7 +229,7 @@ async function openData(dekRaw) {
   data.books.personal = Object.assign(emptyBook(), data.books.personal);
   data.books.business = Object.assign(emptyBook(), data.books.business);
   data.books.student = Object.assign(emptyBook(), data.books.student);
-  data.rules = data.rules || {}; data.seen = data.seen || [];
+  data.rules = data.rules || {}; data.seen = data.seen || []; data.profile = data.profile || {};
   S = { dekRaw, dekKey, data };
 }
 const lockedSeconds = () => Math.max(0, Math.ceil(((meta && meta.lockUntil) || 0) - Date.now() / 1000));
@@ -462,11 +470,26 @@ const logoSvg = (cls = 'logo') => {
   for (let k = 0; k < 5; k++) { const a = (90 + k * 72) * Math.PI / 180; g.append(svg('circle', { cx: 32 + 14 * Math.cos(a), cy: 32 - 14 * Math.sin(a), r: 11, style: 'fill:var(' + (k % 2 ? '--pink' : '--pink2') + ')' })); }
   g.append(svg('circle', { cx: 32, cy: 32, r: 6, style: 'fill:var(--bg)' })); return g;
 };
-function closeSheet() { const s = $app.querySelector('.sheet-bg'); if (s) s.remove(); }
+let sheetPushed = false, skipPop = 0, histFromPop = false;
+function closeSheet() { const s = $app.querySelector('.sheet-bg'); if (s) s.remove(); if (sheetPushed) { sheetPushed = false; skipPop++; history.back(); } }
+function syncHist() {
+  const top = history.state && history.state.v;
+  if (sheetPushed) { if (!$app.querySelector('.sheet-bg')) { sheetPushed = false; history.replaceState({ v: view }, ''); } return; }
+  if (view === 'home') { if (top && top !== 'home') { skipPop++; history.back(); } }
+  else if (!top || top === 'home') history.pushState({ v: view }, '');
+  else if (top !== view) history.replaceState({ v: view }, '');
+}
+window.addEventListener('popstate', e => {
+  if (skipPop > 0) { skipPop--; return; }
+  if (!S) return;
+  if (sheetPushed) { sheetPushed = false; const sh = $app.querySelector('.sheet-bg'); if (sh) sh.remove(); return; }
+  const v = (e.state && e.state.v) || 'home';
+  if (v !== view) { view = v; histFromPop = true; try { route(); } finally { histFromPop = false; } }
+});
 function sheet(...content) {
-  closeSheet();
-  const bg = h('div', { class: 'sheet-bg', onclick: e => { if (e.target === bg) closeSheet(); } }, h('div', { class: 'sheet', role: 'dialog' }, h('div', { class: 'grab' }), ...content));
-  $app.append(bg); return bg;
+  const old = $app.querySelector('.sheet-bg'); if (old) old.remove();
+  const bg = h('div', { class: 'sheet-bg', onclick: e => { if (e.target === bg) closeSheet(); } }, h('div', { class: 'sheet', role: 'dialog' }, h('div', { class: 'grab' }), h('button', { class: 'sheet-x', 'aria-label': 'Close', onclick: () => closeSheet() }, '✕'), ...content));
+  $app.append(bg); if (!sheetPushed) { history.pushState({ sheet: 1 }, ''); sheetPushed = true; } return bg;
 }
 function toast(msg) { const el = h('div', { style: 'position:absolute;left:50%;top:18px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:14px;font-size:13px;z-index:50;max-width:86%;text-align:center' }, msg); $app.append(el); setTimeout(() => el.remove(), 2400); }
 function strength(pw) { let s = 0; if (pw.length >= 8) s++; if (pw.length >= 12) s++; if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) s++; if (/\d/.test(pw) && /[^A-Za-z0-9]/.test(pw)) s++; return s; }
@@ -476,9 +499,28 @@ function langPicker(onchange) {
 }
 
 // ---------- onboarding / lock
+function fbUser() {
+  try { const u = JSON.parse(lsGet('sk.fb') || 'null'); if (u && typeof u.email === 'string' && typeof u.uid === 'string') return { uid: u.uid.slice(0, 128), email: u.email.slice(0, 200), name: String(u.name || '').slice(0, 80), verified: !!u.verified, provider: u.provider === 'google' ? 'google' : 'password' }; } catch (e) { }
+  return null;
+}
+function accountCard(onboard) {
+  const u = fbUser(), go = (a, extra) => { location.href = 'account.html?a=' + a + (extra || ''); };
+  if (u) return h('div', { class: 'card' }, h('div', { class: 'row' }, h('div', { class: 'sp' }, h('b', {}, '✓ ' + t('acc_signed')), h('div', { class: 'sub', style: 'margin:2px 0 0' }, u.email + (u.provider === 'google' ? ' · Google' : u.verified ? '' : ' · ' + t('acc_unverified')))),
+    onboard ? null : h('button', { class: 'btn soft small', style: 'width:auto;margin:0', onclick: () => { if (confirm(t('acc_out_q'))) go('signout'); } }, t('acc_out'))),
+    onboard ? null : h('button', { class: 'btn soft small', style: 'margin-top:10px', onclick: () => go('reset', '&email=' + encodeURIComponent(u.email)) }, t('acc_reset')));
+  return h('div', { class: 'card' }, h('h2', { style: 'margin-bottom:4px' }, t('acc_title')), h('p', { class: 'sub', style: 'margin:0 0 10px;text-align:left' }, t('acc_why')),
+    h('button', { class: 'btn soft', onclick: () => go('signin') }, 'G  ' + t('acc_signin')));
+}
+function forgotSheet() {
+  const u = (meta && meta.email) || (fbUser() || {}).email || '';
+  sheet(h('h2', {}, t('forgot')), h('p', { class: 'sub', style: 'text-align:left' }, t('forgot_why')),
+    u ? h('button', { class: 'btn soft', onclick: () => { location.href = 'account.html?a=reset&email=' + encodeURIComponent(u); } }, '✉ ' + t('acc_reset')) : null,
+    h('button', { class: 'btn soft', style: 'margin-top:10px', onclick: () => { closeSheet(); restoreSheet(); } }, t('import')),
+    h('button', { class: 'btn danger', style: 'margin-top:10px', onclick: () => { if (confirm(t('erase_q'))) { wipeAll(); closeSheet(); route(); } } }, t('erase')));
+}
 function screenOnboard() {
   const r = root();
-  const name = h('input', { placeholder: t('your_name'), autocomplete: 'name', maxlength: 40 });
+  const fbu = fbUser(), name = h('input', { placeholder: t('your_name'), autocomplete: 'name', maxlength: 40, value: (fbu && fbu.name) || '' });
   const pw = h('input', { type: 'password', placeholder: t('password'), autocomplete: 'new-password' });
   const pw2 = h('input', { type: 'password', placeholder: t('confirm'), autocomplete: 'new-password' });
   const meter = h('div', { class: 'meter' }, h('i'));
@@ -490,12 +532,13 @@ function screenOnboard() {
       if (pw.value.length < 8) return err.textContent = t('short');
       if (pw.value !== pw2.value) return err.textContent = t('nomatch');
       go.disabled = true; err.textContent = '…';
-      await createAccount(name.value.trim(), pw.value); startIdle(); route();
+      await createAccount(name.value.trim(), pw.value); if (fbu) { meta.email = fbu.email; meta.fbuid = fbu.uid; saveMeta(); } startIdle(); route();
     }
   }, t('start'));
   r.append(h('div', { class: 'screen' }, h('div', { class: 'scroll', style: 'padding-bottom:30px;text-align:center' },
     h('div', { class: 'row', style: 'justify-content:flex-end;width:130px;margin-left:auto' }, langPicker(screenOnboard)),
     logoSvg(), h('div', { class: 'brand' }, 'SAKURA FINANCE'), h('p', { class: 'sub' }, t('tag')),
+    accountCard(true),
     h('div', { class: 'card' }, h('h2', { style: 'margin-bottom:6px' }, t('create')),
       h('label', {}, t('your_name')), name, h('label', {}, t('password')), pw, meter, h('div', { class: 'sub', style: 'margin:6px 0 0;text-align:left' }, t('pw_hint')),
       h('label', {}, t('confirm')), pw2, err, go,
@@ -539,7 +582,7 @@ function screenLock(note) {
     h('div', { class: 'avatar', style: 'width:64px;height:64px;font-size:26px;margin:14px 0 6px' }, (meta.name || '?')[0].toUpperCase()),
     h('h2', {}, t('hello') + ', ' + meta.name), h('div', { style: 'width:100%;margin-top:18px' }, pw, err, go, bioBtn,
       h('button', { class: 'btn soft', style: 'margin-top:10px', onclick: restoreSheet }, t('import')),
-      h('p', { class: 'sub', style: 'margin-top:14px;cursor:pointer;text-decoration:underline', onclick: () => { if (confirm(t('erase_q'))) { wipeAll(); route(); } } }, t('erase')))));
+      h('p', { class: 'sub', style: 'margin-top:14px;cursor:pointer;text-decoration:underline', onclick: forgotSheet }, t('forgot')))));
   tick(); if (!meta.bio) pw.focus();
 }
 // ---------- auto-lock
@@ -624,11 +667,56 @@ function monthPill() {
     h('span', { class: 'pill mid' }, monthLabel(m) + (m.slice(0, 4) !== today().slice(0, 4) ? ' ' + m.slice(0, 4) : '')),
     h('button', { class: 'pill', disabled: m >= ym(today()), onclick: () => { viewM = shiftYM(m, 1); if (viewM >= ym(today())) viewM = ''; route(); }, 'aria-label': 'Next month' }, '›'));
 }
+const SUPPORT = { email: '', whatsapp: '' }; // <-- put your support email / WhatsApp number (with country code) here
+const prof = () => (S.data.profile = S.data.profile || {});
+function avatarContent() { const ph = prof().photo; return ph ? h('img', { src: ph, alt: '', style: 'width:100%;height:100%;border-radius:50%;object-fit:cover' }) : (meta.name || '?')[0].toUpperCase(); }
+function resizeImage(file, max = 160) {
+  return new Promise((ok, no) => { const img = new Image(), u = URL.createObjectURL(file);
+    img.onload = () => { const r = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * r); c.height = Math.round(img.height * r);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u); ok(c.toDataURL('image/jpeg', .85)); };
+    img.onerror = () => { URL.revokeObjectURL(u); no(new Error('img')); }; img.src = u; });
+}
+function photoPicker(key, obj, label) {
+  const box = h('div', { class: 'row', style: 'margin:8px 0' }), draw = () => { box.replaceChildren(...[
+    obj[key] ? h('img', { src: obj[key], alt: '', style: 'width:56px;height:56px;border-radius:' + (key === 'logo' ? '12px' : '50%') + ';object-fit:cover' }) : h('div', { class: 'avatar', style: 'width:56px;height:56px' }, '📷'),
+    h('label', { class: 'btn soft small', style: 'width:auto;margin:0' }, label, h('input', { type: 'file', accept: 'image/*', class: 'hide', onchange: async e => { const f = e.target.files[0]; if (!f) return; try { obj[key] = await resizeImage(f); draw(); } catch (x) { toast('Image error'); } } })),
+    obj[key] ? h('button', { class: 'btn danger small', style: 'width:auto', onclick: () => { delete obj[key]; draw(); } }, '✕') : null].filter(Boolean)); };
+  draw(); return box;
+}
+function profileSheet() {
+  const p = prof(), co = (p.company = p.company || {}), me = { photo: p.photo };
+  const f = (label, val, type = 'text') => { const i = h('input', { type, value: val || '', placeholder: label }); return [h('label', {}, label), i, i]; };
+  const nm = f(t('your_name'), meta.name), em = f('Email', p.email, 'email'), ph = f('Phone', p.phone, 'tel');
+  const cn = f('Company name', co.name), tx = f('GSTIN / Tax ID', co.tax), ad = f('Address', co.address), cp = f('Company phone', co.phone), ce = f('Company email', co.email, 'email');
+  const ph1 = photoPicker('photo', me, 'Photo'), lg = photoPicker('logo', co, 'Logo');
+  sheet(h('h2', {}, '👤 Profile'), ph1, nm.slice(0, 2), em.slice(0, 2), ph.slice(0, 2),
+    isBiz() ? [h('h3', { style: 'margin:14px 0 4px' }, '🏢 Company'), lg, cn.slice(0, 2), tx.slice(0, 2), ad.slice(0, 2), cp.slice(0, 2), ce.slice(0, 2)] : null,
+    h('button', { class: 'btn', style: 'margin-top:14px', onclick: async () => {
+      const name = nm[2].value.trim(); if (!name) return toast(t('need_name'));
+      meta.name = name; saveMeta(); p.email = em[2].value.trim(); p.phone = ph[2].value.trim();
+      if (me.photo) p.photo = me.photo; else delete p.photo;
+      co.name = cn[2].value.trim(); co.tax = tx[2].value.trim(); co.address = ad[2].value.trim(); co.phone = cp[2].value.trim(); co.email = ce[2].value.trim();
+      await persist(); closeSheet(); toast(t('saved')); route(); } }, t('save') || 'Save'));
+}
+const FAQ = [
+  ['How do I add expenses automatically?', 'Tap the ⚡ button on Home, paste your bank/UPI SMS or choose a bank statement file (.csv).'],
+  ['I forgot my password', 'Your data is encrypted with your password, so it cannot be reset. Restore from a backup file (Settings → Data → Import) if you have one.'],
+  ['Is my data safe?', 'Yes. Everything is encrypted on this phone (AES-256). Nothing is sent to any server.'],
+  ['How do I switch Personal / Student / Business?', 'Use the switch at the top of Home.'],
+  ['How do I change language or theme?', 'Settings → Language / Theme.']];
+function supportSheet() {
+  const q = h('input', { type: 'search', placeholder: 'Search help…' }), list = h('div', {});
+  const draw = () => { list.replaceChildren(...FAQ.filter(x => !q.value || (x[0] + x[1]).toLowerCase().includes(q.value.toLowerCase())).map(x => h('details', { class: 'det' }, h('summary', {}, x[0]), h('p', { class: 'sub' }, x[1])))); };
+  q.oninput = draw; draw();
+  const links = [SUPPORT.email ? h('a', { class: 'btn soft', style: 'display:block;text-align:center;text-decoration:none;margin-top:8px', href: 'mailto:' + SUPPORT.email + '?subject=Sakura%20Finance%20support' }, '✉ Email support') : null,
+    SUPPORT.whatsapp ? h('a', { class: 'btn soft', style: 'display:block;text-align:center;text-decoration:none;margin-top:8px', href: 'https://wa.me/' + SUPPORT.whatsapp.replace(/\D/g, ''), target: '_blank', rel: 'noopener' }, '💬 WhatsApp') : null];
+  sheet(h('h2', {}, '🛟 Help & support'), q, list, links, SUPPORT.email || SUPPORT.whatsapp ? null : h('p', { class: 'sub', style: 'margin-top:10px' }, 'Support contact not set yet.'));
+}
 function shell(body, opts = {}) {
   const r = root();
   const modeSw = h('div', { class: 'mode' }, ['personal', 'student', 'business'].map(m => h('button', { class: S.data.mode === m ? 'on' : '', onclick: async () => { S.data.mode = m; await persist(); if (view === 'invoices' && m !== 'business') view = 'budgets'; route(); } }, t(m))));
   r.append(h('div', { class: 'screen' },
-    h('div', { class: 'top' + (opts.warm ? ' warm' : '') }, h('button', { class: 'avatar', 'aria-label': t('settings'), onclick: () => { view = 'settings'; route(); } }, (meta.name || '?')[0].toUpperCase()),
+    h('div', { class: 'top' + (opts.warm ? ' warm' : '') }, (opts.back ?? view !== 'home') ? h('button', { class: 'backbtn', 'aria-label': 'Back', onclick: () => history.back() }, '‹') : null, h('button', { class: 'avatar', 'aria-label': t('settings'), onclick: () => { view = 'settings'; route(); } }, avatarContent()),
       opts.pill ? opts.pill : h('div', { class: 'sp' }), opts.pill ? null : modeSw, opts.bell !== false ? bellBtn() : null),
     body,
     opts.noNav ? null : h('div', { class: 'nav' }, navBtn('home', t('home')), navBtn('calendar', t('calendar')),
@@ -686,7 +774,7 @@ function viewActivity() {
     rows.slice(0, 200).forEach(x => { if (x.date !== last) { last = x.date; list.append(h('h3', { style: 'margin:14px 0 2px' }, x.date)); } list.append(txRow(x, () => txSheet(x))); });
   };
   const search = h('input', { type: 'search', placeholder: t('search'), value: query, oninput: e => { query = e.target.value; draw(); } });
-  shell(h('div', { class: 'scroll' }, h('div', { class: 'row', style: 'margin-bottom:10px' }, h('div', { class: 'sp' }, search), h('button', { class: 'btn small', onclick: () => captureSheet(), 'aria-label': t('auto_add') }, '⚡')), h('div', { class: 'tabs' }, ['all', 'income', 'expense'].map(k => h('button', { class: 'tab' + (filter === k ? ' on' : ''), onclick: () => { filter = k; route(); } }, t(k)))), h('div', { class: 'card' }, list)));
+  shell(h('div', { class: 'scroll' }, h('div', { class: 'row', style: 'margin-bottom:10px' }, h('div', { class: 'sp' }, search), h('button', { class: 'btn small', onclick: () => captureSheet(), 'aria-label': t('auto_add') }, '⚡')), h('div', { class: 'tabs' }, ['all', 'income', 'expense'].map(k => h('button', { class: 'tab' + (filter === k ? ' on' : ''), onclick: () => { filter = k; route(); } }, t(k)))), h('div', { class: 'card' }, list)), { back: true });
   draw();
 }
 function txSheet(x) {
@@ -768,12 +856,13 @@ function invoiceDetail(i) {
 let draft = '';
 const VL = { en: 'en-IN', lus: 'en-IN', hi: 'hi-IN', bn: 'bn-IN', es: 'es-ES', fr: 'fr-FR', de: 'de-DE', zh: 'zh-CN' };
 function viewAssistant() {
+  if (!chat.length && Array.isArray(S.data.chat)) chat = S.data.chat.map(x => [String(x[0]), String(x[1])]);
   if (!chat.length) chat.push(['bot', t('welcome_bot')]);
   const log = h('div', { class: 'chat' }, chat.map(([w, m]) => h('div', { class: 'msg ' + w }, m)));
   const input = h('input', { placeholder: t('ask_ph'), value: draft, enterkeyhint: 'send', 'aria-label': t('assistant'), oninput: e => draft = e.target.value });
   const send = async (txt, spoken) => {
     window._spk = !!spoken; txt = (txt ?? input.value).trim(); if (!txt) return; draft = ''; chat.push(['me', txt]);
-    const rep = assist(txt); chat.push(['bot', rep || t('unknown')]); try { if (txt && window.speechSynthesis && window._spk) { const u = new SpeechSynthesisUtterance(rep || t('unknown')); u.lang = VL[lang] || 'en-IN'; speechSynthesis.speak(u); } } catch (e) {} await persist(); route(); setTimeout(() => { const s = $app.querySelector('.scroll'); if (s) s.scrollTop = 1e6; }, 30);
+    const rep = assist(txt); chat.push(['bot', rep || t('unknown')]); S.data.chat = chat.slice(-60); try { if (txt && window.speechSynthesis && window._spk) { const u = new SpeechSynthesisUtterance(rep || t('unknown')); u.lang = VL[lang] || 'en-IN'; speechSynthesis.speak(u); } } catch (e) {} await persist(); route(); setTimeout(() => { const s = $app.querySelector('.scroll'); if (s) s.scrollTop = 1e6; }, 30);
   };
   input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -801,7 +890,10 @@ function viewSettings() {
   bioRow.append(bioBtn);
   const file = h('input', { type: 'file', accept: '.json,.sakura', class: 'hide', onchange: () => restoreSheet2(file) });
   shell(h('div', { class: 'scroll set' }, h('div', { class: 'row', style: 'margin-bottom:6px' }, h('h1', { class: 'sp' }, t('settings')), h('button', { class: 'btn soft small', onclick: () => { view = 'home'; route(); } }, '✕')),
-    h('div', { class: 'card' }, h('h2', { style: 'margin-bottom:10px' }, t('theme')), themeRow()),
+    h('div', { class: 'card', onclick: profileSheet, style: 'cursor:pointer' }, h('div', { class: 'row' }, h('div', { class: 'avatar', style: 'width:52px;height:52px' }, avatarContent()),
+      h('div', { class: 'sp' }, h('b', {}, meta.name), h('div', { class: 'sub' }, (prof().email || prof().phone || '') + (isBiz() && prof().company && prof().company.name ? ' · ' + prof().company.name : ''))), h('span', { class: 'tag' }, '✎'))),
+    accountCard(false),
+    h('div', { class: 'card' }, h('h2', { style: 'margin-bottom:10px' }, t('theme')), themeRow(), accentRow()),
     h('div', { class: 'card' }, row(t('language'), langPicker(route)), row(t('currency'), cur), langPackRow()),
     h('div', { class: 'card' }, h('h2', {}, t('security')), bioRow, row(t('autolock'), lock),
       h('button', { class: 'btn soft', style: 'margin-top:6px', onclick: pwSheet }, t('change_pw')), h('button', { class: 'btn', style: 'margin-top:8px', onclick: () => lockNow() }, '🔒 ' + t('lock_now'))),
@@ -810,7 +902,8 @@ function viewSettings() {
       h('button', { class: 'btn soft', style: 'margin-top:8px', onclick: restoreSheet }, t('import')),
       h('button', { class: 'btn soft', style: 'margin-top:8px', onclick: async () => { loadDemo(); await persist(); view = 'home'; route(); } }, t('demo')),
       h('button', { class: 'btn danger', style: 'margin-top:8px', onclick: () => { if (confirm(t('erase_q'))) { wipeAll(); route(); } } }, t('erase'))),
-    h('p', { class: 'sub' }, t('about')), file), { noNav: false });
+    h('button', { class: 'btn soft', style: 'margin-bottom:10px', onclick: supportSheet }, '🛟 Help & support'),
+    h('p', { class: 'sub' }, t('about')), file), { noNav: false, back: true });
 }
 function restoreSheet2() { }
 function pwSheet() {
@@ -1009,7 +1102,25 @@ let theme = (lsGet('sk.theme') && THEMES.includes(lsGet('sk.theme'))) ? lsGet('s
 function applyTheme() {
   const dark = theme === 'midnight' || (theme === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme = dark ? 'midnight' : 'pink';
-  const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = dark ? '#0F0B0D' : '#FDEAF2';
+  const st = document.documentElement.style;
+  ['--pink', '--pink2', '--pinkL', '--hero1', '--hero2', '--bg', '--peach', '--line', '--outer', '--sh'].forEach(v => st.removeProperty(v));
+  const acc = lsGet('sk.accent'), ok = acc && /^#[0-9a-f]{6}$/i.test(acc);
+  if (ok) {
+    const mix = (a, b, r) => { const f = x => [1, 3, 5].map(i => parseInt(x.slice(i, i + 2), 16)), A = f(a), B = f(b); return '#' + A.map((v, i) => Math.round(v * r + B[i] * (1 - r)).toString(16).padStart(2, '0')).join(''); };
+    const set = (k, v) => st.setProperty(k, v);
+    set('--pink', acc);
+    if (dark) { set('--pink2', mix(acc, '#ffffff', .75)); set('--pinkL', mix(acc, '#1B1518', .2)); set('--hero1', acc); set('--hero2', mix(acc, '#000000', .45)); }
+    else { set('--pink2', mix(acc, '#ffffff', .65)); set('--pinkL', mix(acc, '#ffffff', .14)); set('--bg', mix(acc, '#ffffff', .07)); set('--peach', mix(acc, '#ffffff', .15)); set('--line', mix(acc, '#ffffff', .2)); set('--outer', mix(acc, '#ffffff', .12)); set('--hero1', mix(acc, '#ffffff', .65)); set('--hero2', acc); set('--sh', '0 6px 20px ' + mix(acc, '#ffffff', .18)); }
+  }
+  const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = dark ? '#0F0B0D' : (ok ? getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#FDEAF2' : '#FDEAF2');
+}
+const ACCENTS = ['', '#E5384F', '#F28C28', '#2E9E6B', '#14A3A3', '#3B82F6', '#5B5BD6', '#8B5CF6', '#334155'];
+function accentRow() {
+  const cur = lsGet('sk.accent') || '';
+  const pick = c => { lsSet('sk.accent', c); applyTheme(); route(); };
+  const dots = ACCENTS.map(c => h('button', { class: 'dot' + (cur === c ? ' on' : ''), 'aria-label': c || 'Default', style: 'background:' + (c || 'linear-gradient(135deg,#F28BB5,#EC5B97)'), onclick: () => pick(c) }));
+  const custom = h('label', { class: 'dot custom' + (cur && !ACCENTS.includes(cur) ? ' on' : ''), 'aria-label': 'Custom colour', style: 'background:conic-gradient(red,yellow,lime,aqua,blue,magenta,red)' }, h('input', { type: 'color', value: cur || '#EC5B97', class: 'hide', onchange: e => pick(e.target.value) }));
+  return h('div', { style: 'margin-top:14px' }, h('h3', { style: 'margin-bottom:8px' }, t('accent')), h('div', { class: 'dots' }, dots, custom));
 }
 function setTheme(x) { theme = x; lsSet('sk.theme', x); applyTheme(); }
 applyTheme();
@@ -1044,6 +1155,7 @@ function route() {
   if (!meta) return screenOnboard();
   if (!S) return screenLock();
   if (!S.data.modeChosen) return screenMode();
+  if (!histFromPop) syncHist();
   if (sharedText) { const st = sharedText; sharedText = ''; setTimeout(() => captureSheet(st), 50); }
   if (view === 'budgets' && isBiz()) view = 'invoices';
   if (view === 'invoices' && !isBiz()) view = 'budgets';
@@ -1051,4 +1163,5 @@ function route() {
 }
 if (meta === null) { meta = loadMeta(); if (meta && meta.lang && LANG[meta.lang]) lang = meta.lang; }
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => { });
+try { history.replaceState({ v: 'home' }, ''); } catch (e) { }
 route();
