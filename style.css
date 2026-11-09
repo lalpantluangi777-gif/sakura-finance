@@ -164,4 +164,5 @@ html[data-layout=desktop] .scroll.dash{display:grid;grid-template-columns:repeat
 html[data-layout=desktop] .scroll.dash > .hero,html[data-layout=desktop] .scroll.dash > .kpis,html[data-layout=desktop] .scroll.dash > .btn,html[data-layout=desktop] .scroll.dash > .wide{grid-column:1/-1}
 html[data-layout=desktop] .scroll.dash{grid-template-columns:repeat(3,minmax(0,1fr))}
 html[data-layout=desktop] .scroll.dash > .span2{grid-column:span 2}
-.laybtn{border:0;background:var(--card);border-radius:50%;width:36px;height:36px;font-size:17px;box-shadow:var(--sh)}
+.avatar,.bell{flex-shrink:0}
+.laybtn{flex-shrink:0;border:0;background:var(--card);border-radius:50%;width:36px;height:36px;font-size:17px;box-shadow:var(--sh)}
